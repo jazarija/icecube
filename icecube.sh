@@ -1,3 +1,6 @@
+#!/bin/bash
+
+
 # DOCUMENT ME
 BITCOINCORE_FINGERPRINT="01EA5486DE18A882D4C2684590C8019E36C2E964"
 GLACIER_FINGERPRINT="E1AAEBB7AC90C1FE80F010349D1B7F534B43EAB0"
@@ -11,17 +14,18 @@ GLACIER_DOWNLOAD_URL="https://github.com/GlacierProtocol/GlacierProtocol/archive
 DISK=$1
 
 function init_environment() {
-# Required for running in the bootable ubuntu usb  
 
+    # Required for running in the bootable ubuntu usb  
     add-apt-repository universe
 
-    apt-get --assume-yes install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools
+    apt-get --assume-yes install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools
     
     mkdir $HOME/LIVE_BOOT
 
 }
 
 function create_base_system() {
+
     debootstrap --arch=amd64 --variant=minbase stretch $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
 
     # this section needs to be executed within chroot
@@ -33,13 +37,13 @@ function create_base_system() {
         apt-get update &&
         apt-get install --no-install-recommends -y \
             linux-image-amd64 live-boot systemd-sysv blackbox xserver-xorg-core \
-            xserver-xorg xinit xterm # vim qrencode zbar-tools &&
+            xserver-xorg xinit xterm qrencode zbar-tools python && # FIXME : xedit
 
         apt-get clean
         # TODO. Put this in a function that configures the system
         echo "root:icecube" | chpasswd
         printf 'icecube\n' > /etc/hostname
-EOF
+	EOF
 
 }
 
@@ -93,10 +97,25 @@ function trim_installation() {
 #   2. Make X start automatically
 #   3. Set the configurations so that a notepad, the glacier PDF and a terminal window are opened at boot
 function configure_installation() {
-    :
+
+    mkdir -p "$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/"
+    cat <<-'EOF' >$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/override.conf
+        [Service]
+        ExecStart=
+        ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
+	EOF
+    
+    cat <<-'EOF' >>$HOME/LIVE_BOOT/chroot/root/.profile
+        [ "$(tty)" = "/dev/tty1" ] && exec startx
+	EOF
+
+	chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
+		systemctl set-default multi-user.target
+	EOF
 }
 
-# This function is based on the excelent article from Will Haley, see https://willhaley.com/blog/custom-debian-live-environment/
+# This function is based on the excelent article from Will Haley
+# See https://willhaley.com/blog/custom-debian-live-environment/
 function setup_bootable_USB() {
 
     mkdir -p $HOME/LIVE_BOOT/{scratch,image/live}
