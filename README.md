@@ -17,7 +17,10 @@ After (successful) execution you should have a bootable USB running a bare Debia
 
 **Why use it?**
 
-Except for simplifying the protocol procedure a bit, icecube will also enable RAM-only boot, which will make the boot USB key removable and hence offer a slightly higher level of security.
+* Simplifies the creation of the quarantined USB
+* Reduces the number of quarantined USBs needed from 2 per laptop to 1
+* Enables RAM-only boot on the quarantined laptop, allowing the USB key to be removed after boot, preventing any malware from using the USB to exfiltrate data
+
 
 **Should I use it?**
 
