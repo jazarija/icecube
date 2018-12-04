@@ -26,8 +26,9 @@ function create_base_system() {
 
     # this section needs to be executed within chroot
     # this is a place to tweak to add/remove packages from the base system
+    # NOTE. We will need to add python to make glacier work
     chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
-
+        
         export DEBIAN_FRONTEND=noninteractive
         apt-get update &&
         apt-get install --no-install-recommends -y \
