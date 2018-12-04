@@ -8,11 +8,15 @@ BITCOINCORE_DOWNLOAD_URL="https://bitcoincore.org/bin/bitcoin-core-0.17.0.1/bitc
 GLACIER_SHASUMS_URL="https://keybase.io/glacierprotocol/pgp_keys.asc?fingerprint=e1aaebb7ac90c1fe80f010349d1b7f534b43eab0"
 GLACIER_DOWNLOAD_URL="https://github.com/GlacierProtocol/GlacierProtocol/archive/v0.93-beta.tar.gz"
 
-DISK="/dev/sda"
+DISK=$1
 
 function init_environment() {
+# Required for running in the bootable ubuntu usb  
 
-    apt-get install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools
+    add-apt-repository universe
+
+    apt-get --assume-yes install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools
+    
     mkdir $HOME/LIVE_BOOT
 
 }
@@ -118,7 +122,7 @@ EOF
 
     touch $HOME/LIVE_BOOT/image/DEBIAN_CUSTOM
 
-    dd if=/dev/zero of=$DISK bs=1k count=2048
+#    dd if=/dev/zero of=$DISK bs=1k count=2048
 
     mkdir -p /mnt/{usb,efi}
 
@@ -168,10 +172,20 @@ EOF
     umount /mnt/{usb,efi}
 }
 
-#init_environment
-#create_base_system
-#install_glacier
-#install_bitcoincore
-#trim_installation
-#configure_installation
+if [ "$#" -ne 1 ]; then
+    echo "Usage: icecube.sh <PATH TO USB DEVICE>"
+    exit
+fi
+
+if [ "$EUID" -ne 0 ]; then 
+  echo "Please run the script as root."
+  exit
+fi
+
+init_environment
+create_base_system
+install_glacier
+install_bitcoincore
+trim_installation 
+configure_installation
 setup_bootable_USB
