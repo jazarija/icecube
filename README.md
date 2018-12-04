@@ -15,7 +15,7 @@ Plug a USB key into your system, and run the bash script with the path to the us
 
 After (successful) execution you should have a bootable USB running a bare Debian Linux with bitcoin core and glacier installed on the system.
 
-**Why us it?**
+**Why uss it?**
 
 Except for simplifying the protocol procedure a bit, icecube will also enable RAM-only boot, which will make the boot USB key removable and hence offer a slightly higher level of security.
 
