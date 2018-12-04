@@ -20,6 +20,7 @@ After (successful) execution you should have a bootable USB running a bare Debia
 * Simplifies the creation of the quarantined USB
 * Reduces the number of quarantined USBs needed from 2 per laptop to 1
 * Enables RAM-only boot on the quarantined laptop, allowing the USB key to be removed after boot, preventing any malware from using the USB to exfiltrate data
+* Pins the Bitcoin Core version ([GlacierProctocol#38](https://github.com/GlacierProtocol/GlacierProtocol/issues/38))
 
 
 **Should I use it?**
