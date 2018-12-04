@@ -2,50 +2,50 @@
 BITCOINCORE_FINGERPRINT="01EA5486DE18A882D4C2684590C8019E36C2E964"
 GLACIER_FINGERPRINT="E1AAEBB7AC90C1FE80F010349D1B7F534B43EAB0"
 
+BITCOINCORE_SHASUMS_URL="https://bitcoincore.org/bin/bitcoin-core-0.17.0.1/SHA256SUMS.asc"
+BITCOINCORE_DOWNLOAD_URL="https://bitcoincore.org/bin/bitcoin-core-0.17.0.1/bitcoin-0.17.0.1-x86_64-linux-gnu.tar.gz"
+
+GLACIER_SHASUMS_URL="https://keybase.io/glacierprotocol/pgp_keys.asc?fingerprint=e1aaebb7ac90c1fe80f010349d1b7f534b43eab0"
+GLACIER_DOWNLOAD_URL="https://github.com/GlacierProtocol/GlacierProtocol/archive/v0.93-beta.tar.gz"
+
+DISK="/dev/sda"
 
 function init_environment() {
 
-    sudo apt-get install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools
+    apt-get install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools
     mkdir $HOME/LIVE_BOOT
 
 }
 
 function create_base_system() {
-    sudo debootstrap --arch=amd64 --variant=minbase stretch $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
+    debootstrap --arch=amd64 --variant=minbase stretch $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
 
     # this section needs to be executed within chroot
-    # this is the place to tweak to add/remove packages from the base system
-    sudo chroot "$HOME/LIVE_BOOT/chroot" bash << 'EOF'
-    printf 'icecube\n' > /etc/hostname
+    # this is a place to tweak to add/remove packages from the base system
+    chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
 
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update &&
-    apt-get install --no-install-recommends -y \
-        linux-image-amd64 live-boot systemd-sysv blackbox xserver-xorg-core \
-        xserver-xorg xinit xterm # vim qrencode zbar-tools &&
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update &&
+        apt-get install --no-install-recommends -y \
+            linux-image-amd64 live-boot systemd-sysv blackbox xserver-xorg-core \
+            xserver-xorg xinit xterm # vim qrencode zbar-tools &&
 
-    apt-get clean
-    # FIXME Make Xorg start automatically and remove this bit 
-    echo "root:icecube" | chpasswd
-# FIXME try to indent that
+        apt-get clean
+        # TODO. Put this in a function that configures the system
+        echo "root:icecube" | chpasswd
+        printf 'icecube\n' > /etc/hostname
 EOF
 
-
-
-
 }
-
-
 
 # Routine that safely downloads bitcoin core. 
 # FIXME. It is crucial to audit this thorougly.
 function install_bitcoincore() {
    
-    wget https://bitcoincore.org/bin/bitcoin-core-0.17.0.1/SHA256SUMS.asc
-    wget https://bitcoincore.org/bin/bitcoin-core-0.17.0.1/bitcoin-0.17.0.1-x86_64-linux-gnu.tar.gz
+    wget $BITCOINCORE_DOWNLOAD_URL $BITCOINCORE_SHASUMS_URL 
 
     if ! sha256sum --ignore-missing --check SHA256SUMS.asc ; then
-        print 'Something is awfully wrong. Aborting.\n'   
+        print 'Something is awfully wrong with bitcoin core binaries. Aborting.\n'   
         exit
     fi   
 
@@ -57,15 +57,16 @@ function install_bitcoincore() {
         echo "Checking integrity of Bitcoin core failed. Abort protocol"
         exit
     fi        
-    tar -xf bitcoin-0.17.0.1-x86_64-linux-gnu.tar.gz -C $HOME/LIVE_BOOT/chroot
+    # FIXME. Make sure its good to assume we can split in this way
+    tar -xf  `basename $BITCOINCORE_DOWNLOAD_URL` -C $HOME/LIVE_BOOT/chroot
 }
 
 function install_glacier() {
    
-    wget https://github.com/GlacierProtocol/GlacierProtocol/archive/v0.93-beta.tar.gz
-    wget --output-document=glacier.asc  https://keybase.io/glacierprotocol/pgp_keys.asc?fingerprint=e1aaebb7ac90c1fe80f010349d1b7f534b43eab0 
+    wget --output-document=glacier.tar.gz $GLACIER_DOWNLOAD_URL 
+    wget --output-document=glacier.asc $GLACIER_SHASUMS_URL 
     gpg --import glacier.asc
-    mkdir glacier && tar -xf "v0.93-beta.tar.gz" -C glacier --strip-components 1 && cd glacier
+    mkdir glacier &&  tar -xf "glacier.tar.gz" -C glacier --strip-components 1 && cd glacier
     out=$(gpg --status-fd 1 --verify SHA256SUMS.sig SHA256SUMS 2>/dev/null)
     
     if ! (echo "$out" | grep "GOODSIG" && echo "$out" | grep "VALIDSIG $GLACIER_FINGERPRINT") ; then
@@ -77,112 +78,100 @@ function install_glacier() {
     mv glacier $HOME/LIVE_BOOT/chroot/root
 }
 
+# TODO This function should remove all that is unneded on the live USB
+function trim_installation() {
+    :    
+}
 
-### SETUP THE BOOTLOADER
+# TODO This function should configure the underlying OS. Speficially it should
+#   1. Put bitcoind in the init script to be executed at runtime
+#   2. Make X start automatically
+#   3. Set the configurations so that a notepad, the glacier PDF and a terminal window are opened at boot
+function configure_installation() {
+    :
+}
 
-#### MAKE BOOTABLE USB
-
+# This function is based on the excelent article from Will Haley, see https://willhaley.com/blog/custom-debian-live-environment/
 function setup_bootable_USB() {
+
     mkdir -p $HOME/LIVE_BOOT/{scratch,image/live}
 
-    sudo mksquashfs $HOME/LIVE_BOOT/chroot $HOME/LIVE_BOOT/image/live/filesystem.squashfs -e boot
+    mksquashfs $HOME/LIVE_BOOT/chroot $HOME/LIVE_BOOT/image/live/filesystem.squashfs -e boot
 
     cp $HOME/LIVE_BOOT/chroot/boot/vmlinuz-* $HOME/LIVE_BOOT/image/vmlinuz  
     cp $HOME/LIVE_BOOT/chroot/boot/initrd.img-* $HOME/LIVE_BOOT/image/initrd
 
-    cat <<'EOF' >$HOME/LIVE_BOOT/scratch/grub.cfg
+    cat <<-'EOF' >$HOME/LIVE_BOOT/scratch/grub.cfg
 
-    search --set=root --file /DEBIAN_CUSTOM
+        search --set=root --file /DEBIAN_CUSTOM
 
-    insmod all_video
+        insmod all_video
 
-    set default="0"
-    set timeout=0
+        set default="0"
+        set timeout=0
 
-    menuentry "icecube" {
-        linux /vmlinuz boot=live quiet nomodeset
-        initrd /initrd
-    }
+        menuentry "icecube" {
+            linux /vmlinuz boot=live quiet nomodeset
+            initrd /initrd
+        }
 EOF
-
 
     touch $HOME/LIVE_BOOT/image/DEBIAN_CUSTOM
 
-    # FIXME Make this a command line argument
-export disk=/dev/sda
+    dd if=/dev/zero of=$DISK bs=1k count=2048
 
-#FIXME
+    mkdir -p /mnt/{usb,efi}
 
-# Maybe add sudo dd if=/dev/zero of=$disk bs=1k count=2048
+    parted --script $DISK \
+        mklabel gpt \
+        mkpart primary fat32 2048s 4095s \
+            name 1 BIOS \
+            set 1 bios_grub on \
+        mkpart ESP fat32 4096s 413695s \
+            name 2 EFI \
+            set 2 esp on \
+        mkpart primary fat32 413696s 100% \
+            name 3 LINUX \
+            set 3 msftdata on
 
-#or, rather sudo mkfs.vfat /dev/sdZ
-
-
-sudo mkdir -p /mnt/{usb,efi}
-sudo parted --script $disk \
-    mklabel gpt \
-    mkpart primary fat32 2048s 4095s \
-        name 1 BIOS \
-        set 1 bios_grub on \
-    mkpart ESP fat32 4096s 413695s \
-        name 2 EFI \
-        set 2 esp on \
-    mkpart primary fat32 413696s 100% \
-        name 3 LINUX \
-        set 3 msftdata on
-
-sudo gdisk $disk << EOF
-r     # recovery and transformation options
-h     # make hybrid MBR
-1 2 3 # partition numbers for hybrid MBR
-N     # do not place EFI GPT (0xEE) partition first in MBR
-EF    # MBR hex code
-N     # do not set bootable flag
-EF    # MBR hex code
-N     # do not set bootable flag
-83    # MBR hex code
-Y     # set the bootable flag
-x     # extra functionality menu
-h     # recompute CHS values in protective/hybrid MBR
-w     # write table to disk and exit
-Y     # confirm changes
+    gdisk $DISK <<-'EOF'
+        r     # recovery and transformation options
+        h     # make hybrid MBR
+        1 2 3 # partition numbers for hybrid MBR
+        N     # do not place EFI GPT (0xEE) partition first in MBR
+        EF    # MBR hex code
+        N     # do not set bootable flag
+        EF    # MBR hex code
+        N     # do not set bootable flag
+        83    # MBR hex code
+        Y     # set the bootable flag
+        x     # extra functionality menu
+        h     # recompute CHS values in protective/hybrid MBR
+        w     # write table to disk and exit
+        Y     # confirm changes
 EOF
 
-sudo mkfs.vfat -F32 ${disk}2 && \
-sudo mkfs.vfat -F32 ${disk}3
+    mkfs.vfat -F32 ${DISK}2 && mkfs.vfat -F32 ${DISK}3
 
-sudo mount ${disk}2 /mnt/efi && \
-sudo mount ${disk}3 /mnt/usb
+    mount ${DISK}2 /mnt/efi && mount ${DISK}3 /mnt/usb
 
-sudo grub-install --force \
-    --target=x86_64-efi \
-    --efi-directory=/mnt/efi \
-    --boot-directory=/mnt/usb/boot \
-    --removable \
-    --recheck
+    grub-install --force --target=x86_64-efi --efi-directory=/mnt/efi --boot-directory=/mnt/usb/boot --removable --recheck
 
-sudo grub-install --force \
-    --target=i386-pc \
-    --boot-directory=/mnt/usb/boot \
-    --recheck \
-    $disk
+    grub-install --force --target=i386-pc --boot-directory=/mnt/usb/boot --recheck $DISK
 
-sudo mkdir -p /mnt/usb/{boot/grub,live}
+    mkdir -p /mnt/usb/{boot/grub,live}
 
-sudo cp -r $HOME/LIVE_BOOT/image/* /mnt/usb/
+    cp -r $HOME/LIVE_BOOT/image/* /mnt/usb/
 
-sudo cp \
-    $HOME/LIVE_BOOT/scratch/grub.cfg \
-    /mnt/usb/boot/grub/grub.cfg
+    cp $HOME/LIVE_BOOT/scratch/grub.cfg /mnt/usb/boot/grub/grub.cfg
 
-sudo umount /mnt/{usb,efi}
-
+    umount /mnt/{usb,efi}
 }
-
 
 #init_environment
 #create_base_system
-
-install_glacier
-install_bitcoincore
+#install_glacier
+#install_bitcoincore
+#trim_installation
+#configure_installation
 setup_bootable_USB
