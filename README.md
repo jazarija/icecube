@@ -7,7 +7,7 @@ Icecube is a Bash script that generates a bootable USB with a Debian based Linux
 
 It was currently tested to work on Ubuntu 18.04.
 
-**How to use it. **
+**How to use it.**
 
 Icecube is supposed to be run on a Ubuntu system on which you have root privileges, ideally a live USB session. 
 
@@ -15,7 +15,7 @@ Plug a USB key into your system, and run the bash script with the path to the us
 
 After (successful) execution you should have a bootable USB running a bare Debian Linux with bitcoin core and glacier installed on the system.
 
-**Why us it? **
+**Why us it?**
 
 Except for simplifying the protocol procedure a bit, icecube will also enable RAM-only boot, which will make the boot USB key removable and hence offer a slightly higher level of security.
 
