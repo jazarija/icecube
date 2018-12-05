@@ -11,102 +11,104 @@ GLACIER_DOWNLOAD_URL="https://github.com/GlacierProtocol/GlacierProtocol/archive
 
 DISK=$1
 
-function init_environment() {
+init_environment() {
 
-    # Required for running in the bootable ubuntu usb. FIXME. Test if it is still required.  
-    add-apt-repository universe
+	# Required for running in the bootable ubuntu usb. FIXME. Test if it is still required.  
+	add-apt-repository universe &&
 
-    apt-get --assume-yes install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools
-    
-    mkdir $HOME/LIVE_BOOT
+	apt-get --assume-yes install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools &&
 
+	mkdir -p $HOME/LIVE_BOOT 
 }
 
-function create_base_system() {
+create_base_system() {
 
-    debootstrap --arch=amd64 --variant=minbase stretch $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/
+	# FIXME The && is commented because as is debootstrap returns a non-zero exit code. 
+	# Most likely due to the fact that the Debian GPG keys are missing.
+	debootstrap --arch=amd64 --variant=minbase stretch $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/ # && 
+	
+	# this is a place to tweak, add/remove packages from the base system
+	chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
 
-    # this section needs to be executed within chroot
-    # this is a place to tweak to add/remove packages from the base system
-    # NOTE. We will need to add python to make glacier work
-    chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
-        
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update &&
-        apt-get install --no-install-recommends -y \
-            linux-image-amd64 live-boot systemd-sysv blackbox xserver-xorg-core \
-            xserver-xorg xinit xterm qrencode zbar-tools python && # FIXME : xedit
+		export DEBIAN_FRONTEND=noninteractive
+		apt-get update &&
+		apt-get install --no-install-recommends -y \
+		linux-image-amd64 live-boot systemd-sysv blackbox xserver-xorg-core \
+		xserver-xorg xinit xterm qrencode zbar-tools python && # FIXME : xedit
 
-        apt-get clean
-        # TODO. Put this in a function that configures the system
-        echo "root:icecube" | chpasswd
-        printf 'icecube\n' > /etc/hostname
+		apt-get clean
+		# TODO. Put this in a function that configures the system
+		echo "root:icecube" | chpasswd
+		printf 'icecube\n' > /etc/hostname
 	EOF
-
 }
 
 # Routine that safely downloads bitcoin core. 
 # FIXME. It is crucial to audit this thorougly.
 # TODO Make a more thorough pattern matching with grep
 
-function install_bitcoincore() {
-   
-    wget $BITCOINCORE_DOWNLOAD_URL $BITCOINCORE_SHASUMS_URL 
+install_bitcoincore() {
 
-    if ! sha256sum --ignore-missing --check SHA256SUMS.asc ; then
-        print 'Something is awfully wrong with bitcoin core binaries. Aborting.\n'   
-        exit
-    fi   
+	wget $BITCOINCORE_DOWNLOAD_URL $BITCOINCORE_SHASUMS_URL &&
 
-    gpg --recv-keys $BITCOINCORE_FINGERPRINT 
-    
-    out=$(gpg --status-fd 1 --verify SHA256SUMS.asc 2>/dev/null)
-    
-    if ! (echo "$out" | grep "GOODSIG" && echo "$out" | grep "VALIDSIG $BITCOINCORE_FINGERPRINT") ; then
-        echo "Checking integrity of Bitcoin core failed. Abort protocol"
-        exit
-    fi        
+	if ! sha256sum --ignore-missing --check SHA256SUMS.asc ; then
+		print 'Something is awfully wrong with bitcoin core binaries. Aborting.\n'   
+		exit 1
+	fi 
+
+	gpg --recv-keys $BITCOINCORE_FINGERPRINT &&
+
+	out=$(gpg --status-fd 1 --verify SHA256SUMS.asc 2>/dev/null) &&
+
+	if ! (echo "$out" | grep "GOODSIG" && echo "$out" | grep "VALIDSIG $BITCOINCORE_FINGERPRINT") ; then
+		echo "Checking integrity of Bitcoin core failed. Abort protocol"
+		exit
+	fi  &&
+
 	tar -xf  `basename $BITCOINCORE_DOWNLOAD_URL` -C $HOME/LIVE_BOOT/chroot --strip-components=1
 
 }
 
-function install_glacier() {
-   
-    wget --output-document=glacier.tar.gz $GLACIER_DOWNLOAD_URL 
-    wget --output-document=glacier.asc $GLACIER_SHASUMS_URL 
-    gpg --import glacier.asc
-    mkdir glacier &&  tar -xf "glacier.tar.gz" -C glacier --strip-components 1 && cd glacier
-    out=$(gpg --status-fd 1 --verify SHA256SUMS.sig SHA256SUMS 2>/dev/null)
-    
-    if ! (echo "$out" | grep "GOODSIG" && echo "$out" | grep "VALIDSIG $GLACIER_FINGERPRINT") ; then
-        echo "Checking integrity of Glacier failed. Abort protocol"
-        exit
-    fi
+install_glacier() {
 
-    cd .. 
-    mv glacier $HOME/LIVE_BOOT/chroot/root
+	wget --output-document=glacier.tar.gz $GLACIER_DOWNLOAD_URL && 
+	wget --output-document=glacier.asc $GLACIER_SHASUMS_URL &&
+	gpg --import glacier.asc # && FIXME. Same issue as with debootstrap
+
+	mkdir -p glacier &&  
+	tar -xf "glacier.tar.gz" -C glacier --strip-components 1 && 
+	cd glacier &&
+	out=$(gpg --status-fd 1 --verify SHA256SUMS.sig SHA256SUMS 2>/dev/null) &&
+
+	if ! (echo "$out" | grep "GOODSIG" && echo "$out" | grep "VALIDSIG $GLACIER_FINGERPRINT") ; then
+		echo "Checking integrity of Glacier failed. Abort protocol"
+		exit
+	fi
+	cd .. &&
+	mv glacier $HOME/LIVE_BOOT/chroot/root 
 }
 
 # TODO This function should remove all that is unneded on the live USB
-function trim_installation() {
-    :    
+trim_installation() {
+	:
 }
 
 # TODO This function should configure the underlying OS. Speficially it should
 #   1. Put bitcoind in the init script to be executed at runtime
 #   2. Make X start automatically
 #   3. Set the configurations so that a notepad, the glacier PDF and a terminal window are opened at boot
-function configure_installation() {
+configure_installation() {
 
-    mkdir -p "$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/"
-    cat <<-'EOF' >$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/override.conf
-        [Service]
-        ExecStart=
-        ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
-	EOF
-    
-    cat <<-'EOF' >>$HOME/LIVE_BOOT/chroot/root/.profile
-        [ "$(tty)" = "/dev/tty1" ] && exec startx
+	mkdir -p "$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/" &&
+
+	cat <<-'EOF' >$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/override.conf 
+		[Service]
+		ExecStart=
+		ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
+	EOF  
+
+ 	cat <<-'EOF' >>$HOME/LIVE_BOOT/chroot/root/.profile
+		[ "$(tty)" = "/dev/tty1" ] && exec startx
 	EOF
 
 	chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
@@ -116,14 +118,14 @@ function configure_installation() {
 
 # This function is based on the excelent article from Will Haley
 # See https://willhaley.com/blog/custom-debian-live-environment/
-function setup_bootable_USB() {
+setup_bootable_USB() {
 
-    mkdir -p $HOME/LIVE_BOOT/{scratch,image/live}
+    mkdir -p $HOME/LIVE_BOOT/{scratch,image/live} &&
 
-    mksquashfs $HOME/LIVE_BOOT/chroot $HOME/LIVE_BOOT/image/live/filesystem.squashfs -e boot
+    mksquashfs $HOME/LIVE_BOOT/chroot $HOME/LIVE_BOOT/image/live/filesystem.squashfs -e boot &&
 
-    cp $HOME/LIVE_BOOT/chroot/boot/vmlinuz-* $HOME/LIVE_BOOT/image/vmlinuz  
-    cp $HOME/LIVE_BOOT/chroot/boot/initrd.img-* $HOME/LIVE_BOOT/image/initrd
+    cp $HOME/LIVE_BOOT/chroot/boot/vmlinuz-* $HOME/LIVE_BOOT/image/vmlinuz  &&
+    cp $HOME/LIVE_BOOT/chroot/boot/initrd.img-* $HOME/LIVE_BOOT/image/initrd &&
 
     cat <<-'EOF' >$HOME/LIVE_BOOT/scratch/grub.cfg
 
@@ -140,11 +142,9 @@ function setup_bootable_USB() {
         }
 EOF
 
-    touch $HOME/LIVE_BOOT/image/DEBIAN_CUSTOM
+    touch $HOME/LIVE_BOOT/image/DEBIAN_CUSTOM &&
 
-#    dd if=/dev/zero of=$DISK bs=1k count=2048
-
-    mkdir -p /mnt/{usb,efi}
+    mkdir -p /mnt/{usb,efi} &&
 
     parted --script $DISK \
         mklabel gpt \
@@ -156,7 +156,7 @@ EOF
             set 2 esp on \
         mkpart primary fat32 413696s 100% \
             name 3 LINUX \
-            set 3 msftdata on
+            set 3 msftdata on &&
 
     gdisk $DISK <<-'EOF'
         r     # recovery and transformation options
@@ -175,37 +175,64 @@ EOF
         Y     # confirm changes
 EOF
 
-    mkfs.vfat -F32 ${DISK}2 && mkfs.vfat -F32 ${DISK}3
+    mkfs.vfat -F32 ${DISK}2 && mkfs.vfat -F32 ${DISK}3 &&
 
-    mount ${DISK}2 /mnt/efi && mount ${DISK}3 /mnt/usb
+    mount ${DISK}2 /mnt/efi && mount ${DISK}3 /mnt/usb &&
 
-    grub-install --force --target=x86_64-efi --efi-directory=/mnt/efi --boot-directory=/mnt/usb/boot --removable --recheck
+    grub-install --force --target=x86_64-efi --efi-directory=/mnt/efi --boot-directory=/mnt/usb/boot --removable --recheck &&
 
-    grub-install --force --target=i386-pc --boot-directory=/mnt/usb/boot --recheck $DISK
+    grub-install --force --target=i386-pc --boot-directory=/mnt/usb/boot --recheck $DISK &&
 
-    mkdir -p /mnt/usb/{boot/grub,live}
+    mkdir -p /mnt/usb/{boot/grub,live} &&
 
-    cp -r $HOME/LIVE_BOOT/image/* /mnt/usb/
+    cp -r $HOME/LIVE_BOOT/image/* /mnt/usb/ &&
 
-    cp $HOME/LIVE_BOOT/scratch/grub.cfg /mnt/usb/boot/grub/grub.cfg
+    cp $HOME/LIVE_BOOT/scratch/grub.cfg /mnt/usb/boot/grub/grub.cfg &&
 
     umount /mnt/{usb,efi}
 }
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: icecube.sh <PATH TO USB DEVICE>"
-    exit
+    exit 
 fi
 
 if [ "$EUID" -ne 0 ]; then 
   echo "Please run the script as root."
-  exit
+  exit 1
 fi
 
-init_environment
-create_base_system
-install_glacier
-install_bitcoincore
-trim_installation 
-configure_installation
-setup_bootable_USB
+if ! init_environment ; then
+	echo "Failure setting up the guest environment."
+	exit 1
+fi	
+
+if ! create_base_system ; then
+	echo "Failure creating base system."
+	exit 1
+fi
+
+if ! install_glacier ; then
+	echo "Failure setting up glacier."
+	exit 1
+fi
+
+if ! install_bitcoincore ; then
+	echo "Failure inastalling bitcoin core."
+	exit 1
+fi	
+
+if ! trim_installation ; then
+	echo "Failed trimming installation."
+	exit 1
+fi
+
+if ! configure_installation ; then
+	echo "Failed configuring installation."
+	exit 1
+fi	
+
+if ! setup_bootable_USB ; then
+	echo "Failed to setup bootable USB."
+	exit 1
+fi	
