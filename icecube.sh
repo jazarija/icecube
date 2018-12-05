@@ -1,7 +1,5 @@
 #!/bin/bash
 
-
-# DOCUMENT ME
 BITCOINCORE_FINGERPRINT="01EA5486DE18A882D4C2684590C8019E36C2E964"
 GLACIER_FINGERPRINT="E1AAEBB7AC90C1FE80F010349D1B7F534B43EAB0"
 
@@ -15,7 +13,7 @@ DISK=$1
 
 function init_environment() {
 
-    # Required for running in the bootable ubuntu usb  
+    # Required for running in the bootable ubuntu usb. FIXME. Test if it is still required.  
     add-apt-repository universe
 
     apt-get --assume-yes install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools
@@ -49,6 +47,8 @@ function create_base_system() {
 
 # Routine that safely downloads bitcoin core. 
 # FIXME. It is crucial to audit this thorougly.
+# TODO Make a more thorough pattern matching with grep
+
 function install_bitcoincore() {
    
     wget $BITCOINCORE_DOWNLOAD_URL $BITCOINCORE_SHASUMS_URL 
@@ -66,8 +66,8 @@ function install_bitcoincore() {
         echo "Checking integrity of Bitcoin core failed. Abort protocol"
         exit
     fi        
-    # FIXME. Make sure its good to assume we can split in this way
-    tar -xf  `basename $BITCOINCORE_DOWNLOAD_URL` -C $HOME/LIVE_BOOT/chroot
+	tar -xf  `basename $BITCOINCORE_DOWNLOAD_URL` -C $HOME/LIVE_BOOT/chroot --strip-components=1
+
 }
 
 function install_glacier() {
@@ -135,7 +135,7 @@ function setup_bootable_USB() {
         set timeout=0
 
         menuentry "icecube" {
-            linux /vmlinuz boot=live quiet nomodeset
+            linux /vmlinuz boot=live quiet nomodeset toram
             initrd /initrd
         }
 EOF
@@ -202,10 +202,10 @@ if [ "$EUID" -ne 0 ]; then
   exit
 fi
 
-init_environment
-create_base_system
-install_glacier
+#init_environment
+#create_base_system
+#install_glacier
 install_bitcoincore
-trim_installation 
-configure_installation
-setup_bootable_USB
+#trim_installation 
+#configure_installation
+#setup_bootable_USB
