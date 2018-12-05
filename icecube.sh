@@ -202,10 +202,10 @@ if [ "$EUID" -ne 0 ]; then
   exit
 fi
 
-#init_environment
-#create_base_system
-#install_glacier
+init_environment
+create_base_system
+install_glacier
 install_bitcoincore
-#trim_installation 
-#configure_installation
-#setup_bootable_USB
+trim_installation 
+configure_installation
+setup_bootable_USB
