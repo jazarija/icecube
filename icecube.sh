@@ -105,11 +105,9 @@ configure_installation() {
 		[Service]
 		ExecStart=
 		ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
-	EOF  
-
- 	cat <<-'EOF' >>$HOME/LIVE_BOOT/chroot/root/.profile
-		[ "$(tty)" = "/dev/tty1" ] && exec startx
 	EOF
+
+ 	echo '[ "$(tty)" = "/dev/tty1" ] && exec startx' >> $HOME/LIVE_BOOT/chroot/root/.profile &&
 
 	chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
 		systemctl set-default multi-user.target
