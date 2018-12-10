@@ -34,7 +34,7 @@ create_base_system() {
 		apt-get update &&
 		apt-get install --no-install-recommends -y \
 		linux-image-amd64 live-boot systemd-sysv blackbox xserver-xorg-core \
-		xserver-xorg xinit xterm qrencode zbar-tools python && # FIXME : xedit
+		xserver-xorg xinit xterm qrencode zbar-tools python xxd x11-apps && # FIXME : xedit
 
 		apt-get clean
 		# TODO. Put this in a function that configures the system
