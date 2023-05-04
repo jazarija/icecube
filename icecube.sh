@@ -13,20 +13,19 @@ DISK=$1
 
 init_environment() {
 
-	# Required for running in the bootable ubuntu usb. FIXME. Test if it is still required.  
+	# Required for running in the bootable ubuntu usb. FIXME. Test if it is still required.
 	add-apt-repository universe &&
 
 	apt-get --assume-yes install debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools &&
 
-	mkdir -p $HOME/LIVE_BOOT 
+	mkdir -p $HOME/LIVE_BOOT
 }
 
 create_base_system() {
 
-	# FIXME The && is commented because as is debootstrap returns a non-zero exit code. 
+	# FIXME The && is commented because as is debootstrap returns a non-zero exit code.
 	# Most likely due to the fact that the Debian GPG keys are missing.
-	debootstrap --arch=amd64 --variant=minbase stretch $HOME/LIVE_BOOT/chroot http://ftp.us.debian.org/debian/ # && 
-	
+    debootstrap --arch=amd64 --variant=minbase stable $HOME/LIVE_BOOT/chroot http://deb.debian.org/debian/
 	# this is a place to tweak, add/remove packages from the base system
 	chroot "$HOME/LIVE_BOOT/chroot" bash <<-'EOF'
 
@@ -43,7 +42,7 @@ create_base_system() {
 	EOF
 }
 
-# Routine that safely downloads bitcoin core. 
+# Routine that safely downloads bitcoin core.
 # FIXME. It is crucial to audit this thorougly.
 # TODO Make a more thorough pattern matching with grep
 
@@ -52,11 +51,10 @@ install_bitcoincore() {
 	wget $BITCOINCORE_DOWNLOAD_URL $BITCOINCORE_SHASUMS_URL &&
 
 	if ! sha256sum --ignore-missing --check SHA256SUMS.asc ; then
-		print 'Something is awfully wrong with bitcoin core binaries. Aborting.\n'   
+		print 'Something is awfully wrong with bitcoin core binaries. Aborting.\n'
 		exit 1
-	fi 
-
-	gpg --recv-keys $BITCOINCORE_FINGERPRINT &&
+	fi
+    gpg --keyserver  hkp://keyserver.ubuntu.com --recv-keys  $BITCOINCORE_FINGERPRINT
 
 	out=$(gpg --status-fd 1 --verify SHA256SUMS.asc 2>/dev/null) &&
 
@@ -71,12 +69,12 @@ install_bitcoincore() {
 
 install_glacier() {
 
-	wget --output-document=glacier.tar.gz $GLACIER_DOWNLOAD_URL && 
+	wget --output-document=glacier.tar.gz $GLACIER_DOWNLOAD_URL &&
 	wget --output-document=glacier.asc $GLACIER_SHASUMS_URL &&
 	gpg --import glacier.asc # && FIXME. Same issue as with debootstrap
 
-	mkdir -p glacier &&  
-	tar -xf "glacier.tar.gz" -C glacier --strip-components 1 && 
+	mkdir -p glacier &&
+	tar -xf "glacier.tar.gz" -C glacier --strip-components 1 &&
 	cd glacier &&
 	out=$(gpg --status-fd 1 --verify SHA256SUMS.sig SHA256SUMS 2>/dev/null) &&
 
@@ -85,7 +83,7 @@ install_glacier() {
 		exit
 	fi
 	cd .. &&
-	mv glacier $HOME/LIVE_BOOT/chroot/root 
+	mv glacier $HOME/LIVE_BOOT/chroot/root
 }
 
 # TODO This function should remove all that is unneded on the live USB
@@ -101,7 +99,7 @@ configure_installation() {
 
 	mkdir -p "$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/" &&
 
-	cat <<-'EOF' >$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/override.conf 
+	cat <<-'EOF' >$HOME/LIVE_BOOT/chroot/etc/systemd/system/getty@tty1.service.d/override.conf
 		[Service]
 		ExecStart=
 		ExecStart=-/sbin/agetty --autologin root --noclear %I $TERM
@@ -192,33 +190,33 @@ EOF
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: icecube.sh <PATH TO USB DEVICE>"
-    exit 
+    exit
 fi
 
-if [ "$EUID" -ne 0 ]; then 
+if [ "$EUID" -ne 0 ]; then
   echo "Please run the script as root."
   exit 1
 fi
 
-if ! init_environment ; then
-	echo "Failure setting up the guest environment."
-	exit 1
-fi	
+#if ! init_environment ; then
+#	echo "Failure setting up the guest environment."
+#	exit 1
+#fi
 
-if ! create_base_system ; then
-	echo "Failure creating base system."
-	exit 1
-fi
+#if ! create_base_system ; then
+#	echo "Failure creating base system."
+#	exit 1
+#fi
 
-if ! install_glacier ; then
-	echo "Failure setting up glacier."
-	exit 1
-fi
+#if ! install_glacier ; then
+#	echo "Failure setting up glacier."
+#	exit 1
+#fi
 
-if ! install_bitcoincore ; then
-	echo "Failure inastalling bitcoin core."
-	exit 1
-fi	
+#if ! install_bitcoincore ; then
+#	echo "Failure inastalling bitcoin core."
+#	exit 1
+#fi
 
 if ! trim_installation ; then
 	echo "Failed trimming installation."
@@ -228,9 +226,9 @@ fi
 if ! configure_installation ; then
 	echo "Failed configuring installation."
 	exit 1
-fi	
+fi
 
 if ! setup_bootable_USB ; then
 	echo "Failed to setup bootable USB."
 	exit 1
-fi	
+fi
